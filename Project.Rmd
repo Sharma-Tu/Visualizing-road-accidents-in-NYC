@@ -1,0 +1,272 @@
+---
+title: "Project"
+author: "Tushar"
+date: "1 March 2019"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r data preprocessing, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+library(scales)
+library(ggplot2)
+library(stringr)
+library(ggplot2)
+library(changepoint)
+library(scales)
+library(dplyr)
+library(tidyr)
+library(grid)
+library(gridExtra)
+
+#importing data
+nydata<-read.csv("NYPD_Motor_Vehicle_Collisions.csv", stringsAsFactors = FALSE, na.strings = '')
+
+#extracting hour and year in another column
+nydata$hour<- as.integer(str_split_fixed(nydata$TIME,":",2)[,1])
+nydata$year<- as.integer(str_split_fixed(nydata$DATE,"/",3)[,3])
+
+#Weekday weekend split with general count and sums
+nydata$Weekday<- weekdays(as.Date(nydata$DATE, "%m/%d/%Y"))
+
+nydata$tag <- ifelse(nydata$Weekday %in% 
+                                       c("Monday","Tuesday","Wednesday","Thursday","Friday"), 
+                                     "Weekday", "Weekend")
+
+
+
+#key-value to convert injured columns->rows
+nydata_injury <- filter(gather(nydata[,c(1,19,33,30,13,15,17,24)] , 
+                    key = "Fatal.Category", 
+                    value = "Injured", 
+                    NUMBER.OF.PEDESTRIANS.INJURED,
+                    NUMBER.OF.CYCLIST.INJURED, 
+                    NUMBER.OF.MOTORIST.INJURED), is.na(Injured) == FALSE)
+
+#key-value to convert killed columns->rows
+nydata_killed <- filter(gather(nydata[,c(1,19,33,30,14,16,18,24)] , 
+                   key = "Fatal.Category",
+                   value = "Killed",
+                   NUMBER.OF.PEDESTRIANS.KILLED,
+                   NUMBER.OF.CYCLIST.KILLED,
+                   NUMBER.OF.MOTORIST.KILLED), is.na(Killed) == FALSE)
+
+#summarizing measures for required parameters
+nysummary_injury <- nydata_injury %>%
+                      group_by(CONTRIBUTING.FACTOR.VEHICLE.1,
+                                hour, tag, Fatal.Category) %>%
+                                summarise(TOTAL.injured = sum(Injured, na.rm = TRUE),
+                                Day.Count = n_distinct(DATE, na.rm = TRUE),
+                                Accident.count = n_distinct(UNIQUE.KEY, na.rm = TRUE))
+
+nysummary_killed <- nydata_killed %>%
+                    group_by(CONTRIBUTING.FACTOR.VEHICLE.1,
+                             hour, tag, Fatal.Category) %>%
+                             summarise(TOTAL.killed = sum(Killed, na.rm = TRUE),
+                             Day.Count = n_distinct(DATE, na.rm = TRUE),
+                             Accident.count = n_distinct(UNIQUE.KEY, na.rm = TRUE))
+
+
+nysummary_injury_final <- nydata_injury %>%
+  group_by(CONTRIBUTING.FACTOR.VEHICLE.1,
+           hour) %>%
+            summarise(TOTAL.injured = sum(Injured, na.rm = TRUE),
+            Day.Count = n_distinct(DATE, na.rm = TRUE),
+            Accident.count = n_distinct(UNIQUE.KEY, na.rm = TRUE))
+
+nysummary_killed_final <- nydata_killed %>%
+  group_by(CONTRIBUTING.FACTOR.VEHICLE.1,
+           hour) %>%
+            summarise(TOTAL.killed = sum(Killed, na.rm = TRUE),
+            Day.Count = n_distinct(DATE, na.rm = TRUE),
+            Accident.count = n_distinct(UNIQUE.KEY, na.rm = TRUE))
+
+#replacing fatal categories for consistency before merge
+nysummary_injury$Fatal.Category <- str_split_fixed(nysummary_injury$Fatal.Category, "\\.",4)[,3]
+nysummary_killed$Fatal.Category <- str_split_fixed(nysummary_killed$Fatal.Category, "\\.",4)[,3]
+
+#creating final dataset here
+nysummary<- merge(x= nysummary_injury, 
+                   y= nysummary_killed, 
+                   by =  c("CONTRIBUTING.FACTOR.VEHICLE.1",
+                           "hour", "tag", "Fatal.Category"),
+                   all = TRUE)
+
+nysummary_final<- merge(x= nysummary_injury_final, 
+                  y= nysummary_killed_final, 
+                  by =  c("CONTRIBUTING.FACTOR.VEHICLE.1",
+                          "hour"),
+                  all = TRUE)
+
+nysummary_final <- arrange(nysummary_final, desc(TOTAL.injured))
+
+
+nysummary_final$cont <- nysummary_final$Accident.count.x/sum(nysummary_final$Accident.count.x)
+
+nysummary_final$cont <- ifelse(nysummary_final$CONTRIBUTING.FACTOR.VEHICLE.1 %in%
+                                 c("Driver Inattention/Distraction",
+                                   "Failure to Yield Right-of-Way",
+                                   "Following Too Closely",
+                                   "Backing Unsafely",
+                                   "Fatigued/Drowsy",
+                                   "Other Vehicular",
+                                   "Turning Improperly",
+                                   "Passing or Lane Usage Improper",
+                                   "Passing Too Closely",
+                                   "Unsafe Lane Changing",
+                                   "Traffic Control Disregarded",
+                                   "Driver Inexperience",
+                                   "Lost Consciousness",
+                                   "Prescription Medication",
+                                   "Pavement Slippery",
+                                   "Alcohol Involvement",
+                                   "Outside Car Distraction",
+                                   "Reaction to Uninvolved Vehicle",
+                                   "Unsafe Speed"), nysummary_final$CONTRIBUTING.FACTOR.VEHICLE.1, "Others")
+
+# || (nysummary_final$cont!="Others") && (is.na(nysummary_final$cont)!=TRUE))
+nysummary_final_sub <- nysummary_final[(nysummary_final$CONTRIBUTING.FACTOR.VEHICLE.1!="Unspecified"),]
+nysummary_final_sub <- nysummary_final_sub[(is.na(nysummary_final$cont)!=TRUE),]
+
+
+contmap<- read.csv("cont.csv", stringsAsFactors = FALSE)
+
+
+nysummary_final_red <- merge(x=nysummary_final_sub, y= contmap, by=("CONTRIBUTING.FACTOR.VEHICLE.1"), all.x = TRUE)
+
+
+nysummary_final_red$injuredrate<-nysummary_final_red$TOTAL.injured/nysummary_final_red$Accident.count.x
+nysummary_final_red$injuredratio<-nysummary_final_red$TOTAL.injured/(nysummary_final_red$TOTAL.injured+
+                                                               nysummary_final_red$TOTAL.killed)
+
+nysummary_final_red$killedrate<-nysummary_final_red$TOTAL.killed/nysummary_final_red$Accident.count.x
+nysummary_final_red$killedratio<-nysummary_final_red$TOTAL.killed/(nysummary_final_red$TOTAL.killed+
+                                                               nysummary_final_red$TOTAL.injured)
+
+nysummary_final_red<-nysummary_final_red[is.na(nysummary_final_red$Cont)==FALSE,] 
+
+nysummary_area_Plot <- nysummary_final_red %>% 
+                                group_by(Cont, hour) %>%
+                                summarise(Total.Injured=sum(TOTAL.injured, na.rm = TRUE),
+                                          TOTAL.killed=sum(TOTAL.killed, na.rm = TRUE),
+                                          TOTAL.Incidents=sum(Accident.count.x, na.rm = TRUE))
+
+```
+
+
+```{r plots}
+p1<- ggplot(nysummary_area_Plot, aes(x = hour, y= TOTAL.Incidents, fill=Cont))+
+  scale_x_continuous(name="Hour", breaks = seq(0,23,1))+scale_y_continuous(name = "Contribution to Total Incidents",labels = percent_format())+geom_area(stat="Identity",position="fill",
+                                                                                                                                                         alpha = 0.8, color = "grey70")+ggtitle("Incidents")+theme_minimal()+
+  geom_vline(xintercept = c(4,6,8,9,17,18,20), linetype = "dashed", size=0.5, alpha = 0.5)+theme(legend.box.background = element_rect())+theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5, size = 12))+theme(axis.title.y=element_text(size=8), axis.title.x =element_text(size=6))
+
+p2<- ggplot(nysummary_area_Plot, aes(x = hour, y= Total.Injured, fill=Cont))+
+  scale_x_continuous(name="Hour", breaks = seq(0,23,1))+scale_y_continuous(name = "Contribution to Total Injured")+geom_area(stat="Identity",position="fill",
+                                                                                                                                                       alpha = 0.8, color = "grey70")+ggtitle("Injuries")+theme_minimal()+
+  geom_vline(xintercept = c(4,6,8,9,17,18,20), linetype = "dashed", size=0.5, alpha = 0.5)+theme(legend.box.background = element_rect())+theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5, size =12))+theme(axis.title.y=element_text(size=8), axis.title.x =element_text(size=6))
+
+p3<- ggplot(nysummary_area_Plot, aes(x = hour, y= TOTAL.killed, fill=Cont))+
+  scale_x_continuous(name="Hour", breaks = seq(0,23,1))+scale_y_continuous(name = "Contribution to Total Deaths")+geom_area(stat="Identity",position="fill",alpha = 0.8, color = "grey70")+ggtitle("Deaths")+theme_minimal()+
+  geom_vline(xintercept = c(4,6,8,9,17,18,20), linetype = "dashed", size=0.5, alpha = 0.5)+theme(legend.box.background = element_rect())+theme(legend.position="none")+theme(plot.title = element_text(hjust = 0.5, size = 12))+theme(axis.title.y=element_text(size=8), axis.title.x =element_text(size=8), plot.title = element_text(size = 10))
+
+
+grid.arrange(p2,p3)
+```
+
+## Including Plots
+
+```{r Incidents plot}
+nysummary_incidents<- summarise(group_by(nysummary_area_Plot, Cont), Total.Incidents = sum(TOTAL.Incidents))
+
+ggplot(nysummary_incidents, aes(x = reorder(Cont, Total.Incidents), y = Total.Incidents, fill = factor(Cont))) +scale_y_continuous(breaks = c(0,100000,200000,300000,400000))+scale_x_discrete()+
+        geom_bar(stat = "identity", alpha = 0.8) +
+        coord_flip() + 
+        ggtitle("Incident counts by contribution factors") + theme(axis.text.y = element_text(angle =70, hjust = 0.2), axis.title.x=element_blank(), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),legend.key = element_rect(fill = "white", colour = "black"),panel.grid.major = element_blank(), panel.grid.minor = element_blank(), panel.background = element_blank())+guides(fill=guide_legend(title="Contribution Factor"))
+
+```
+
+```{r Maps preprocessing}
+
+library(ggmap)
+register_google(key = "AIzaSyBtBKJv6Owt0yYRnj6VUZOci9gYh1B4_bM", account_type = "standard")
+
+
+nydata_streets<- nydata[is.na(nydata$ON.STREET.NAME) == FALSE,]
+
+nydata_streets_contfact<- merge(x=nydata_streets, 
+                                y= contmap, by=("CONTRIBUTING.FACTOR.VEHICLE.1"), all.x = TRUE)
+
+
+#library(dplyr)
+nystreets <- arrange(nydata_streets_contfact %>%
+  group_by(ON.STREET.NAME, Cont, hour) %>%
+  summarise(TOTAL.killed = sum(NUMBER.OF.PERSONS.KILLED, na.rm = TRUE),
+            TOTAL.injured = sum(NUMBER.OF.PERSONS.INJURED, na.rm = TRUE),
+            TOTAL.incidents = n_distinct(UNIQUE.KEY, na.rm = TRUE)), desc(TOTAL.incidents))
+
+nystreets <- nystreets[is.na(nystreets$Cont) == FALSE,]
+
+
+
+nystreets$daysplit <- ifelse(nystreets$hour<7, "Night", "Day")
+
+nystreets_summary <- arrange(nystreets %>%
+                       group_by(ON.STREET.NAME, Cont, daysplit) %>%
+                       summarise(TOTAL.killed = sum(TOTAL.killed, na.rm = TRUE),
+                                 TOTAL.injured = sum(TOTAL.injured, na.rm = TRUE),
+                                 TOTAL.incidents = sum(TOTAL.incidents, na.rm = TRUE)),
+                     desc(TOTAL.incidents))
+
+
+daymap<-nystreets_summary[nystreets_summary$daysplit=="Day",]
+
+nightmap<-nystreets_summary[nystreets_summary$daysplit=="Night",]
+
+nightmap<-nightmap[(nightmap$Cont=="DUI" | nightmap$Cont=="OverSpeeding"),]
+daymap<-daymap[(daymap$Cont=="DriverFault" | daymap$Cont=="DriverDistracted"),]
+
+night<- arrange(data.frame(summarise(group_by(nightmap, ON.STREET.NAME),
+                                     Total = sum(TOTAL.incidents))), desc(Total))
+
+day <- arrange(data.frame(summarise(group_by(daymap, ON.STREET.NAME),
+                                     Total = sum(TOTAL.incidents))), desc(Total))
+
+#Selecting top 20 streets
+night<-night[1:20,]
+day<-day[1:20,]
+
+#getting all coordinates for top 20 streets
+night <- merge(x= night, y = nydata, by = c("ON.STREET.NAME"), all.x = TRUE)
+
+day <- merge(x= day, y = nydata, by = c("ON.STREET.NAME"), all.x = TRUE)
+
+#map settings
+theme_set(theme_dark())
+NYMap <- qmap("new york", zoom = 11, maptype = c("roadmap"))
+
+
+```
+
+```{r Night Map plot}
+NYMap +
+  geom_point(aes(x = LONGITUDE, y = LATITUDE,
+                 colour = desc(Total)),
+             data = night, size = 0.2, alpha = 0.3)+labs(colour = "Incident Frequency")
+
+```
+
+```{r Day Map plot}
+
+NYMap +
+  geom_point(aes(x = LONGITUDE, y = LATITUDE,
+                 colour = desc(Total)),
+             data = day, size = 0.2, alpha = 0.3)+labs(colour = "Incident Frequency")
+
+
+
+```
+
+
