@@ -1,4 +1,4 @@
 # NYPDCollision
 NYPD collision Data Set
 
-Please view the docx file for details.
+Please view the DOCX file for details.
