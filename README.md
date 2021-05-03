@@ -1,24 +1,19 @@
 # NYPD Collisions - Hourly analysis
 
-#### Contributing factors aggregated till date:
+### Contributing factors aggregated till date:
 
 ![](frequency_histogram.png) 
 
-#### NYPD collisions aggregated hourly till date:
+### NYPD collisions aggregated hourly till date:
 
 ![](nypd_hourly.png) 
+ 
 
-
-
-#### Contributing factors aggregated till date:
-
-![](frequency_histogram.png) 
-
-#### Daytime incidents street level heatmap:
+### Daytime incidents street level heatmap:
 
 ![](Daytime.png) 
 
-#### Nighttime incidents street level heatmap:
+### Nighttime incidents street level heatmap:
 
 ![](Nightime.png) 
 
