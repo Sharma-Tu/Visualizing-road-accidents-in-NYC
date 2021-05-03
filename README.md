@@ -1,5 +1,5 @@
 # NYPD Collisions - Hourly analysis
-NYPD collisions Hourly aggregated till date:
+NYPD collisions aggregated hourly till date:
 
 ![](nypd_hourly.png) 
 
