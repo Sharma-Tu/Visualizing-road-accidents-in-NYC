@@ -1,11 +1,14 @@
 # NYPD Collisions - Hourly analysis
-#### NYPD collisions aggregated hourly till date:
-
-![](nypd_hourly.png) 
 
 #### Contributing factors aggregated till date:
 
 ![](frequency_histogram.png) 
+
+#### NYPD collisions aggregated hourly till date:
+
+![](nypd_hourly.png) 
+
+
 
 #### Contributing factors aggregated till date:
 
