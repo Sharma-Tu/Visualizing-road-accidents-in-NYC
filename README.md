@@ -1,4 +1,4 @@
-# NYPD Collisions - Hourly analysis
+# NYC Collisions from NYPD dataset - Hourly analysis
 
 ### Contributing factors aggregated till date:
 
@@ -18,3 +18,6 @@
 ![](Nightime.png) 
 
 Please view the [PDF](https://github.com/Sharma-Tu/Visualizing-road-accidents-in-NYC/blob/master/NYPD_collisions.pdf) file for details.
+
+
+Data Source: https://www.kaggle.com/new-york-city/nypd-motor-vehicle-collisions
