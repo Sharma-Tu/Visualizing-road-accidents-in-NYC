@@ -1,5 +1,5 @@
 library(ggmap)
-register_google(key = "AIzaSyBtBKJv6Owt0yYRnj6VUZOci9gYh1B4_bM", account_type = "standard")
+register_google(key = "########################################", account_type = "standard")
 
 ggmap(get_map("New York City", maptype = "roadmap"))
 
